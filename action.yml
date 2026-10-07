@@ -1,0 +1,59 @@
+name: 'Z-BlogPHP App Lint'
+description: 'Run ESLint and PHP-CS-Fixer on Z-BlogPHP plugin/theme code (check or auto-fix)'
+author: 'wdssmq'
+
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  path:
+    description: 'Path to the Z-BlogPHP plugin/theme directory to lint (relative to repo root)'
+    required: false
+    default: '.'
+  mode:
+    description: 'Run mode: "check" (report issues and fail, default) or "fix" (auto-fix, changes stay in workspace)'
+    required: false
+    default: 'check'
+  eslint:
+    description: 'Run ESLint (true / false)'
+    required: false
+    default: 'true'
+  php:
+    description: 'Run PHP-CS-Fixer (true / false)'
+    required: false
+    default: 'true'
+  fixer-version:
+    description: 'PHP-CS-Fixer release tag (phar) to use'
+    required: false
+    default: 'v3.64.0'
+
+outputs:
+  eslint-status:
+    description: 'ESLint result: passed / failed / fixed-with-issues / skipped'
+    value: ${{ steps.lint.outputs.eslint-status }}
+  php-status:
+    description: 'PHP-CS-Fixer result: passed / failed / fixed-with-issues / skipped'
+    value: ${{ steps.lint.outputs.php-status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: 'Cache lint tools (node_modules + php-cs-fixer.phar)'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ${{ github.action_path }}/node_modules
+          ${{ github.action_path }}/php-cs-fixer.phar
+        key: zbp-app-lint-${{ runner.os }}-eslint-9.39-fixer-${{ inputs.fixer-version }}
+
+    - name: 'Run zbp-app-lint'
+      id: lint
+      shell: bash
+      run: |
+        bash "${{ github.action_path }}/scripts/lint.sh" \
+          --path "${{ inputs.path }}" \
+          --mode "${{ inputs.mode }}" \
+          --eslint "${{ inputs.eslint }}" \
+          --php "${{ inputs.php }}" \
+          --fixer-version "${{ inputs.fixer-version }}"

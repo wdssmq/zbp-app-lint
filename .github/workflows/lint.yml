@@ -1,0 +1,44 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    name: 'self-test: check built-in configs'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 'Run zbp-app-lint (check mode on config/)'
+        uses: ./
+        with:
+          path: 'config'
+
+  fix-smoke:
+    name: 'self-test: fix mode on fixtures'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 'Run zbp-app-lint (fix mode on tests/fixtures/)'
+        uses: ./
+        with:
+          path: 'tests/fixtures'
+          mode: 'fix'
+
+      - name: 'Verify fixtures were actually fixed'
+        run: |
+          if git diff --quiet -- tests/fixtures; then
+            echo '::error::fix mode produced no changes on fixtures, expected fixes'
+            exit 1
+          fi
+          git diff -- tests/fixtures
+
+      - name: 'Run zbp-app-lint again (check mode must pass now)'
+        uses: ./
+        with:
+          path: 'tests/fixtures'
+          mode: 'check'
