@@ -26,6 +26,5 @@ return (new PhpCsFixer\Config())
     ->setRiskyAllowed(false)
     ->setRules([
         '@PSR12' => true,
-        'target_php_version' => '7.3',
     ])
     ->setFinder($finder);

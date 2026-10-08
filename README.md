@@ -59,13 +59,13 @@ jobs:
 ## 配置解析（内置 + 可覆盖）
 
 - **ESLint**：若目标目录或仓库根存在 `eslint.config.{js,mjs,cjs}` 则优先使用调用方配置（此时需调用方自行安装配置中依赖的插件，如仓库内有 `package.json` + `node_modules` 即可）；否则使用 action 内置配置（见 `config/eslint.config.mjs`，含 `zbp` / `bloghost` / `jQuery` 等 Z-Blog 全局变量，缩进 2、双引号、强制分号等）。
-- **PHP-CS-Fixer**：若目标目录或仓库根存在 `.php-cs-fixer.dist.php` / `.php-cs-fixer.php` 则优先使用；否则使用内置规则（`@PSR12`，`target_php_version: 7.3`，排除 `vendor` / `node_modules` / `.history`），见 `config/.php-cs-fixer.dist.php`。
+- **PHP-CS-Fixer**：若目标目录或仓库根存在 `.php-cs-fixer.dist.php` / `.php-cs-fixer.php` 则优先使用；否则使用内置规则（`@PSR12`，排除 `vendor` / `node_modules` / `.history`），见 `config/.php-cs-fixer.dist.php`。
 
 内置规则仅通过 `--config` 参数引用，不会写入调用方仓库；npm 安装产物与 phar 均落在 action 目录内。
 
 ## 环境要求
 
-Runner 需自带 Node.js ≥ 18.18（ESLint 9 要求）与 PHP ≥ 7.4（php-cs-fixer 3.x 运行要求）。`ubuntu-latest` 默认满足。规则中 `target_php_version: 7.3` 保证修复产物兼容 Z-Blog 的 PHP 7.3+ 要求。
+Runner 需自带 Node.js ≥ 18.18（ESLint 9 要求）与 PHP ≥ 7.4（php-cs-fixer 3.x 运行要求）。`ubuntu-latest` 默认满足。
 
 ## 本仓库自检
 
