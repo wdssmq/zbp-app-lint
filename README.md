@@ -36,22 +36,22 @@ jobs:
 
 ## Inputs
 
-| name            | 默认值   | 说明                                                                                 |
-| --------------- | -------- | ------------------------------------------------------------------------------------ |
-| `path`          | `.`      | 检查目标目录，相对仓库根目录                                                         |
-| `mode`          | `check`  | `check`：仅检查，发现问题输出 diff 并使 action 失败；`fix`：自动修复，改动留在工作区 |
-| `eslint`        | `true`   | 是否运行 ESLint                                                                      |
-| `php`           | `true`   | 是否运行 PHP-CS-Fixer                                                                |
-| `fixer-version` | `v3.7.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
+| name            | 默认值   | 说明                                                                                        |
+| --------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `path`          | `.`      | 检查目标目录，相对仓库根目录                                                                |
+| `mode`          | `check`  | `check`：仅检查，发现问题输出 diff 并使 action 失败；`fix`：自动修复，改动留在工作区        |
+| `eslint`        | `true`   | 是否运行 ESLint                                                                             |
+| `php`           | `true`   | 是否运行 PHP-CS-Fixer                                                                       |
+| `fixer-version` | `v3.7.0` | php-cs-fixer phar 的 GitHub Release tag                                                     |
 | `php-version`   | `7.4`    | 通过 [shivammathur/setup-php@v2](https://github.com/shivammathur/setup-php) 安装的 PHP 版本 |
-| `changed-only`  | `true`   | 仅检查/修复本次事件中变更的 PHP/JS 文件；设 `false` 走全量扫描（见「增量模式」）      |
+| `changed-only`  | `true`   | 仅检查/修复本次事件中变更的 PHP/JS 文件；设 `false` 走全量扫描（见「增量模式」）            |
 
 ## Outputs
 
-| name            | 取值                                                  | 说明              |
-| --------------- | ----------------------------------------------------- | ----------------- |
-| `eslint-status` | `passed` / `failed` / `fixed-with-issues` / `skipped` | ESLint 结果       |
-| `php-status`    | 同上                                                  | PHP-CS-Fixer 结果 |
+| name            | 取值                                                  | 说明                                                                                              |
+| --------------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| `eslint-status` | `passed` / `failed` / `fixed-with-issues` / `skipped` | ESLint 结果                                                                                       |
+| `php-status`    | 同上                                                  | PHP-CS-Fixer 结果                                                                                 |
 | `any-changed`   | `true` / `false`                                      | 本次事件是否存在变更文件（仅在 `changed-only=true` 时有意义），可用于决定是否执行后续 commit/push |
 
 ## 模式说明
@@ -83,10 +83,10 @@ jobs:
 
 ### 各事件的变更集语义
 
-| 事件 | 变更基准 |
-| --- | --- |
-| `push` | 与本次推送前的提交比较 |
-| `pull_request` | 与 PR base 提交比较 |
+| 事件                             | 变更基准                                                            |
+| -------------------------------- | ------------------------------------------------------------------- |
+| `push`                           | 与本次推送前的提交比较                                              |
+| `pull_request`                   | 与 PR base 提交比较                                                 |
 | `workflow_dispatch` / `schedule` | 通常没有差异，会整体跳过（请显式设 `changed-only: 'false'` 跑全量） |
 
 ### 调用方要求
@@ -99,13 +99,6 @@ jobs:
 - 变更文件列表以空格分隔传递，**文件名含空格会被错误拆分**，无法正确归属到工具。
 - 增量模式跳过的不只是 lint，**整个 action 步骤（包括 setup-php / phar 下载 / npm install）都会被短路**——这是省时间的设计，但请勿将本 action 视为"流程前置"，否则后续步骤会拿不到 PHP/Node 工具链。如确有依赖，需关闭 `changed-only` 或前置单独跑 setup。
 
-### 需要全量扫描时
-
-```yaml
-      - uses: wdssmq/zbp-app-lint@v1
-        with:
-          changed-only: 'false'
-```
 
 ## 环境要求
 
