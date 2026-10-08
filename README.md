@@ -34,6 +34,7 @@ jobs:
 | `eslint`        | `true`   | 是否运行 ESLint                                                                      |
 | `php`           | `true`   | 是否运行 PHP-CS-Fixer                                                                |
 | `fixer-version` | `v3.4.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
+| `php-version`   | `8.2`    | 通过 [shivammathur/setup-php@v2](https://github.com/shivammathur/setup-php) 安装的 PHP 版本 |
 
 ## Outputs
 
@@ -65,7 +66,7 @@ jobs:
 
 ## 环境要求
 
-Runner 需自带 Node.js ≥ 18.18（ESLint 9 要求）与 PHP ≥ 7.4（php-cs-fixer 3.x 运行要求）。`ubuntu-latest` 默认满足。
+Runner 需自带 Node.js ≥ 18.18（ESLint 9 要求）。PHP 由本 action 通过 [`shivammathur/setup-php@v2`](https://github.com/shivammathur/setup-php) 安装，默认版本见 `php-version` 输入。
 
 ## 本仓库自检
 
