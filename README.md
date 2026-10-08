@@ -22,18 +22,18 @@ jobs:
           mode: 'check'          # 'check'（默认）或 'fix'
           eslint: 'true'         # 是否运行 ESLint
           php: 'true'            # 是否运行 PHP-CS-Fixer
-          fixer-version: 'v3.64.0'  # php-cs-fixer phar 版本
+          fixer-version: 'v3.4.0'  # php-cs-fixer phar 版本
 ```
 
 ## Inputs
 
-| name            | 默认值    | 说明                                                                                 |
-| --------------- | --------- | ------------------------------------------------------------------------------------ |
-| `path`          | `.`       | 检查目标目录，相对仓库根目录                                                         |
-| `mode`          | `check`   | `check`：仅检查，发现问题输出 diff 并使 action 失败；`fix`：自动修复，改动留在工作区 |
-| `eslint`        | `true`    | 是否运行 ESLint                                                                      |
-| `php`           | `true`    | 是否运行 PHP-CS-Fixer                                                                |
-| `fixer-version` | `v3.64.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
+| name            | 默认值   | 说明                                                                                 |
+| --------------- | -------- | ------------------------------------------------------------------------------------ |
+| `path`          | `.`      | 检查目标目录，相对仓库根目录                                                         |
+| `mode`          | `check`  | `check`：仅检查，发现问题输出 diff 并使 action 失败；`fix`：自动修复，改动留在工作区 |
+| `eslint`        | `true`   | 是否运行 ESLint                                                                      |
+| `php`           | `true`   | 是否运行 PHP-CS-Fixer                                                                |
+| `fixer-version` | `v3.4.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
 
 ## Outputs
 
@@ -59,7 +59,7 @@ jobs:
 ## 配置解析（内置 + 可覆盖）
 
 - **ESLint**：若目标目录或仓库根存在 `eslint.config.{js,mjs,cjs}` 则优先使用调用方配置（此时需调用方自行安装配置中依赖的插件，如仓库内有 `package.json` + `node_modules` 即可）；否则使用 action 内置配置（见 `config/eslint.config.mjs`，含 `zbp` / `bloghost` / `jQuery` 等 Z-Blog 全局变量，缩进 2、双引号、强制分号等）。
-- **PHP-CS-Fixer**：若目标目录或仓库根存在 `.php-cs-fixer.dist.php` / `.php-cs-fixer.php` 则优先使用；否则使用内置规则（`@PSR12`，排除 `vendor` / `node_modules` / `.history`），见 `config/.php-cs-fixer.dist.php`。
+- **PHP-CS-Fixer**：若目标目录或仓库根存在 `.php-cs-fixer.dist.php` / `.php-cs-fixer.php` 则优先使用；否则使用内置规则，见 `config/.php-cs-fixer.dist.php`。
 
 内置规则仅通过 `--config` 参数引用，不会写入调用方仓库；npm 安装产物与 phar 均落在 action 目录内。
 
