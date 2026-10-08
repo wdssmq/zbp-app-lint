@@ -1,7 +1,8 @@
 # 依赖及缓存
+.php-cs-fixer.cache
 node_modules/
 php-cs-fixer.phar
-.php-cs-fixer.cache
+vendor/
 
 # 操作系统文件
 .DS_Store
