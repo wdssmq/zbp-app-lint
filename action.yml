@@ -26,11 +26,11 @@ inputs:
   fixer-version:
     description: 'PHP-CS-Fixer release tag (phar) to use'
     required: false
-    default: 'v3.4.0'
+    default: 'v3.7.0'
   php-version:
-    description: 'PHP version to install via shivammathur/setup-php (e.g. "8.2", "8.3"). PHP-CS-Fixer 3.x recommends PHP 8.0+.'
+    description: 'PHP version to install via shivammathur/setup-php (e.g. "7.4", "8.2"). PHP-CS-Fixer 3.x requires PHP 7.4+.'
     required: false
-    default: '8.2'
+    default: '7.4'
 
 outputs:
   eslint-status:

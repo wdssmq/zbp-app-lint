@@ -17,7 +17,7 @@ MODE="check"
 TARGET_PATH="."
 ENABLE_ESLINT="true"
 ENABLE_PHP="true"
-FIXER_VERSION="v3.64.0"
+FIXER_VERSION="v3.7.0"
 
 while [[ $# -gt 0 ]]; do
     if [[ $# -lt 2 ]]; then

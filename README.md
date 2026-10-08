@@ -22,7 +22,7 @@ jobs:
           mode: 'check'          # 'check'（默认）或 'fix'
           eslint: 'true'         # 是否运行 ESLint
           php: 'true'            # 是否运行 PHP-CS-Fixer
-          fixer-version: 'v3.4.0'  # php-cs-fixer phar 版本
+          fixer-version: 'v3.7.0'  # php-cs-fixer phar 版本
 ```
 
 ## Inputs
@@ -33,8 +33,8 @@ jobs:
 | `mode`          | `check`  | `check`：仅检查，发现问题输出 diff 并使 action 失败；`fix`：自动修复，改动留在工作区 |
 | `eslint`        | `true`   | 是否运行 ESLint                                                                      |
 | `php`           | `true`   | 是否运行 PHP-CS-Fixer                                                                |
-| `fixer-version` | `v3.4.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
-| `php-version`   | `8.2`    | 通过 [shivammathur/setup-php@v2](https://github.com/shivammathur/setup-php) 安装的 PHP 版本 |
+| `fixer-version` | `v3.7.0` | php-cs-fixer phar 的 GitHub Release tag                                              |
+| `php-version`   | `7.4`    | 通过 [shivammathur/setup-php@v2](https://github.com/shivammathur/setup-php) 安装的 PHP 版本 |
 
 ## Outputs
 
