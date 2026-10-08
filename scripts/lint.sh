@@ -4,7 +4,15 @@
 #
 # Usage:
 #   lint.sh --path <dir> --mode <check|fix> --eslint <true|false> \
-#           --php <true|false> --fixer-version <tag>
+#           --php <true|false> --fixer-version <tag> --changed-only <true|false>
+#
+# Incremental mode:
+#   --changed-only true (default) restricts the tools to the files listed in
+#   the ZBP_LINT_CHANGED_FILES environment variable (space separated, relative
+#   to the workspace root, as produced by tj-actions/changed-files).
+#   When that variable is set but no file survives filtering, every tool is
+#   reported as "skipped" and the script exits 0 without installing anything.
+#   Outside GitHub Actions an unset variable falls back to a full scan.
 #
 # Exit codes:
 #   0 - check mode: no issues / fix mode: completed without tool errors
@@ -18,6 +26,7 @@ TARGET_PATH="."
 ENABLE_ESLINT="true"
 ENABLE_PHP="true"
 FIXER_VERSION="v3.7.0"
+CHANGED_ONLY="true"
 
 while [[ $# -gt 0 ]]; do
     if [[ $# -lt 2 ]]; then
@@ -30,12 +39,18 @@ while [[ $# -gt 0 ]]; do
         --eslint) ENABLE_ESLINT="$2" ; shift 2 ;;
         --php) ENABLE_PHP="$2" ; shift 2 ;;
         --fixer-version) FIXER_VERSION="$2" ; shift 2 ;;
+        --changed-only) CHANGED_ONLY="$2" ; shift 2 ;;
         *) echo "::error::lint.sh: unknown argument: $1" >&2 ; exit 2 ;;
     esac
 done
 
 if [[ "$MODE" != "check" && "$MODE" != "fix" ]]; then
     echo "::error::lint.sh: invalid mode '$MODE' (expected 'check' or 'fix')" >&2
+    exit 2
+fi
+
+if [[ "$CHANGED_ONLY" != "true" && "$CHANGED_ONLY" != "false" ]]; then
+    echo "::error::lint.sh: invalid --changed-only '$CHANGED_ONLY' (expected 'true' or 'false')" >&2
     exit 2
 fi
 
@@ -50,6 +65,71 @@ else
     echo "::error::lint.sh: target path not found: $TARGET_PATH" >&2
     exit 2
 fi
+
+# --------------------------------------------------- incremental scope ------
+
+# INCREMENTAL=1 means: only the files listed in ZBP_LINT_CHANGED_FILES
+# (space separated, relative to the workspace root) are processed.
+INCREMENTAL=0
+CHANGED_FILES_RAW="${ZBP_LINT_CHANGED_FILES:-}"
+ALL_CHANGED=()
+
+if [[ "$CHANGED_ONLY" == "true" ]]; then
+    if [[ -n "${ZBP_LINT_CHANGED_FILES+x}" ]]; then
+        INCREMENTAL=1
+    elif [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+        # On GitHub Actions without a file list: nothing changed in this event.
+        INCREMENTAL=1
+    else
+        echo "==> changed-only=true but ZBP_LINT_CHANGED_FILES is unset, falling back to a full scan"
+    fi
+fi
+
+is_ignored_path() {
+    [[ "$1" == */node_modules/* || "$1" == */vendor/* || "$1" == */.history/* \
+        || "$1" == */.git/* || "$1" == */dist/* ]]
+}
+
+# Resolve the raw list into absolute paths that live inside TARGET_DIR.
+collect_changed_files() {
+    ALL_CHANGED=()
+    local rel abs
+    for rel in $CHANGED_FILES_RAW; do
+        [[ -n "$rel" ]] || continue
+        rel="${rel#./}"
+        abs="$WORKSPACE/$rel"
+        # Drop deleted files, files outside the target directory and files
+        # that live in an ignored directory.
+        [[ -f "$abs" ]] || continue
+        [[ "$abs" == "$TARGET_DIR"/* ]] || continue
+        is_ignored_path "$abs" && continue
+        ALL_CHANGED+=("$abs")
+    done
+}
+
+# Fill TARGETS with the collected files matching an extension pattern
+# (e.g. 'php' or 'js|mjs|cjs').
+filter_by_extension() {
+    TARGETS=()
+    local file
+    for file in ${ALL_CHANGED[@]+"${ALL_CHANGED[@]}"}; do
+        [[ "$file" =~ \.($1)$ ]] && TARGETS+=("$file")
+    done
+}
+
+log_changed_files() {
+    local total=$1 i=0 file rel
+    echo "==> Incremental mode: $total changed file(s) inside $TARGET_DIR"
+    for file in ${ALL_CHANGED[@]+"${ALL_CHANGED[@]}"}; do
+        if [[ $i -ge 20 ]]; then
+            echo "    ... ($((total - i)) more)"
+            break
+        fi
+        rel="${file#"$WORKSPACE"/}"
+        echo "    $rel"
+        i=$((i + 1))
+    done
+}
 
 GITHUB_OUTPUT="${GITHUB_OUTPUT:-}"
 GITHUB_STEP_SUMMARY="${GITHUB_STEP_SUMMARY:-}"
@@ -109,10 +189,22 @@ run_eslint() {
         return 0
     fi
 
-    if ! eslint_files_exist; then
-        echo "==> ESLint: no JS files found under $TARGET_DIR, skipping"
-        ESLINT_STATUS="skipped"
-        return 0
+    local targets=()
+    if [[ "$INCREMENTAL" == "1" ]]; then
+        filter_by_extension 'js|mjs|cjs'
+        targets=(${TARGETS[@]+"${TARGETS[@]}"})
+        if [[ ${#targets[@]} -eq 0 ]]; then
+            echo "==> ESLint: no changed JS files inside $TARGET_DIR, skipping"
+            ESLINT_STATUS="skipped"
+            return 0
+        fi
+    else
+        if ! eslint_files_exist; then
+            echo "==> ESLint: no JS files found under $TARGET_DIR, skipping"
+            ESLINT_STATUS="skipped"
+            return 0
+        fi
+        targets=("$TARGET_DIR")
     fi
 
     echo "==> ESLint: installing dependencies in action directory"
@@ -153,9 +245,9 @@ run_eslint() {
         args+=(--fix)
     fi
 
-    echo "==> ESLint: running in $MODE mode on $TARGET_DIR"
+    echo "==> ESLint: running in $MODE mode on ${#targets[@]} target(s)"
     local out rc
-    out="$(cd "$WORKSPACE" && "$eslint_bin" ${args[@]+"${args[@]}"} "$TARGET_DIR" 2>&1)"
+    out="$(cd "$WORKSPACE" && "$eslint_bin" ${args[@]+"${args[@]}"} ${targets[@]+"${targets[@]}"} 2>&1)"
     rc=$?
     if [[ -n "$out" ]]; then
         echo "$out"
@@ -206,10 +298,22 @@ run_php() {
         return 0
     fi
 
-    if ! php_files_exist; then
-        echo "==> PHP-CS-Fixer: no PHP files found under $TARGET_DIR, skipping"
-        PHP_STATUS="skipped"
-        return 0
+    local targets=()
+    if [[ "$INCREMENTAL" == "1" ]]; then
+        filter_by_extension 'php'
+        targets=(${TARGETS[@]+"${TARGETS[@]}"})
+        if [[ ${#targets[@]} -eq 0 ]]; then
+            echo "==> PHP-CS-Fixer: no changed PHP files inside $TARGET_DIR, skipping"
+            PHP_STATUS="skipped"
+            return 0
+        fi
+    else
+        if ! php_files_exist; then
+            echo "==> PHP-CS-Fixer: no PHP files found under $TARGET_DIR, skipping"
+            PHP_STATUS="skipped"
+            return 0
+        fi
+        targets=("$TARGET_DIR")
     fi
 
     local phar="$ACTION_DIR/php-cs-fixer.phar"
@@ -262,9 +366,9 @@ run_php() {
         args+=(--dry-run --diff)
     fi
 
-    echo "==> PHP-CS-Fixer: running in $MODE mode on $TARGET_DIR"
+    echo "==> PHP-CS-Fixer: running in $MODE mode on ${#targets[@]} target(s)"
     local out rc
-    out="$(cd "$cfg_dir" && php "$phar" fix ${args[@]+"${args[@]}"} 2>&1)"
+    out="$(cd "$cfg_dir" && php "$phar" fix ${args[@]+"${args[@]}"} ${targets[@]+"${targets[@]}"} 2>&1)"
     rc=$?
     if [[ -n "$out" ]]; then
         echo "$out"
@@ -293,16 +397,33 @@ run_php() {
 
 # -------------------------------------------------------------------- main --
 
+if [[ "$INCREMENTAL" == "1" ]]; then
+    collect_changed_files
+    log_changed_files "${#ALL_CHANGED[@]}"
+    if [[ ${#ALL_CHANGED[@]} -eq 0 ]]; then
+        echo "==> Nothing to lint: no changed file inside $TARGET_DIR, all tools will be skipped"
+    fi
+else
+    echo "==> Full scan mode on $TARGET_DIR"
+fi
+
 run_eslint
 run_php
 
 set_output "eslint-status" "$ESLINT_STATUS"
 set_output "php-status" "$PHP_STATUS"
 
+if [[ "$INCREMENTAL" == "1" ]]; then
+    SCOPE="incremental (${#ALL_CHANGED[@]} files)"
+else
+    SCOPE="full scan"
+fi
+
 summary ""
 summary "## zbp-app-lint result"
 summary ""
 summary "- mode: \`${MODE}\`"
+summary "- scope: \`${SCOPE}\`"
 summary "- target: \`${TARGET_DIR}\`"
 summary "- ESLint: **${ESLINT_STATUS}**"
 summary "- PHP-CS-Fixer: **${PHP_STATUS}**"

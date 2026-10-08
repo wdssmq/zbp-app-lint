@@ -16,6 +16,7 @@ jobs:
         uses: ./
         with:
           path: 'config'
+          changed-only: 'false'
 
   fix-smoke:
     name: 'self-test: fix mode on fixtures'
@@ -28,6 +29,7 @@ jobs:
         with:
           path: 'tests/fixtures'
           mode: 'fix'
+          changed-only: 'false'
 
       - name: 'Verify fixtures were actually fixed'
         run: |
@@ -42,3 +44,17 @@ jobs:
         with:
           path: 'tests/fixtures'
           mode: 'check'
+          changed-only: 'false'
+
+  incremental-shortcircuit:
+    name: 'self-test: incremental mode short-circuits with an empty list'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: 'Run lint.sh with an empty ZBP_LINT_CHANGED_FILES'
+        env:
+          ZBP_LINT_CHANGED_FILES: ''
+          GITHUB_ACTIONS: 'true'
+        run: |
+          bash scripts/lint.sh --path config --mode check --changed-only true

@@ -31,6 +31,10 @@ inputs:
     description: 'PHP version to install via shivammathur/setup-php (e.g. "7.4", "8.2"). PHP-CS-Fixer 3.x requires PHP 7.4+.'
     required: false
     default: '7.4'
+  changed-only:
+    description: 'Only lint files changed in the current event (true / false). When false, run a full scan of the path.'
+    required: false
+    default: 'true'
 
 outputs:
   eslint-status:
@@ -39,16 +43,33 @@ outputs:
   php-status:
     description: 'PHP-CS-Fixer result: passed / failed / fixed-with-issues / skipped'
     value: ${{ steps.lint.outputs.php-status }}
+  any-changed:
+    description: 'Whether the current event contains changed PHP/JS files (true / false). Only meaningful when changed-only is true.'
+    value: ${{ steps.changed.outputs.any_changed }}
 
 runs:
   using: 'composite'
   steps:
+    - name: 'Collect changed files'
+      id: changed
+      if: inputs.changed-only == 'true'
+      uses: tj-actions/changed-files@v47
+      with:
+        fetch_depth: 0
+        files: |
+          **/*.php
+          **/*.js
+          **/*.mjs
+          **/*.cjs
+
     - name: 'Set up PHP'
+      if: inputs.changed-only != 'true' || steps.changed.outputs.any_changed == 'true'
       uses: shivammathur/setup-php@v2
       with:
         php-version: ${{ inputs.php-version }}
 
     - name: 'Cache lint tools (node_modules + php-cs-fixer.phar)'
+      if: inputs.changed-only != 'true' || steps.changed.outputs.any_changed == 'true'
       uses: actions/cache@v5
       with:
         path: |
@@ -58,11 +79,15 @@ runs:
 
     - name: 'Run zbp-app-lint'
       id: lint
+      if: inputs.changed-only != 'true' || steps.changed.outputs.any_changed == 'true'
       shell: bash
+      env:
+        ZBP_LINT_CHANGED_FILES: ${{ steps.changed.outputs.all_changed_files }}
       run: |
         bash "${{ github.action_path }}/scripts/lint.sh" \
           --path "${{ inputs.path }}" \
           --mode "${{ inputs.mode }}" \
           --eslint "${{ inputs.eslint }}" \
           --php "${{ inputs.php }}" \
-          --fixer-version "${{ inputs.fixer-version }}"
+          --fixer-version "${{ inputs.fixer-version }}" \
+          --changed-only "${{ inputs.changed-only }}"
