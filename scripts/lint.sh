@@ -215,7 +215,7 @@ run_php() {
     local phar="$ACTION_DIR/php-cs-fixer.phar"
     if [[ ! -f "$phar" ]]; then
         local url="https://github.com/PHP-CS-Fixer/PHP-CS-Fixer/releases/download/$FIXER_VERSION/php-cs-fixer.phar"
-        echo "==> PHP-CS-Fixer: downloading $FIXER_VERSION"
+        echo "==> PHP-CS-Fixer: downloading $FIXER_VERSION | $url"
         if ! curl -fsSL -o "$phar" "$url"; then
             echo "::error::PHP-CS-Fixer: failed to download $url" >&2
             PHP_STATUS="failed"
