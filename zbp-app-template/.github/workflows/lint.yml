@@ -1,0 +1,69 @@
+name: lint
+
+on:
+  push:
+    branches:
+      - '**'
+
+permissions:
+  contents: write
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Detect app directory
+        id: app
+        shell: bash
+        run: |
+          # 1. 优先按仓库名约定 zbp_<AppID> 推导目录
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+          APP_DIR="${REPO_NAME#zbp_}"
+
+          if [[ "$APP_DIR" == "$REPO_NAME" || ! -d "$APP_DIR" ]]; then
+            # 2. 回退：查找 plugin.xml / theme.xml 所在目录
+            APP_DIR=""
+            for manifest in plugin.xml theme.xml; do
+              hit="$(find . -maxdepth 3 -name "$manifest" -not -path './.git/*' -print -quit)"
+              if [[ -n "$hit" ]]; then
+                APP_DIR="$(dirname "$hit")"
+                APP_DIR="${APP_DIR#./}"
+                break
+              fi
+            done
+          fi
+
+          # 3. 兜底：仓库根目录
+          APP_DIR="${APP_DIR:-.}"
+
+          echo "path=$APP_DIR" >> "$GITHUB_OUTPUT"
+          echo "识别到应用目录：$APP_DIR"
+
+      - name: Run zbp-app-lint
+        id: lint
+        uses: wdssmq/zbp-app-lint@v1
+        with:
+          path: ${{ steps.app.outputs.path }}
+          mode: 'fix'
+          changed-only: 'true'
+
+      - name: Commit files
+        if: steps.lint.outputs.any-changed == 'true'
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git status
+          git diff-index --quiet HEAD || (git commit -m "Auto Commit - Lint [skip ci]" -a --no-verify)
+
+      - name: Push changes
+        if: steps.lint.outputs.any-changed == 'true'
+        uses: ad-m/github-push-action@master
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}

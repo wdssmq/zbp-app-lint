@@ -1,0 +1,177 @@
+name: Build & Release ZBA
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 10
+
+      - name: Extract Plugin ID
+        id: plugin
+        shell: bash
+        run: |
+          REPO_NAME="${GITHUB_REPOSITORY##*/}"
+
+          if [[ "$REPO_NAME" != zbp_* ]]; then
+            echo "::error::仓库名必须为 zbp_<PluginID> 格式，当前为: $REPO_NAME"
+            exit 1
+          fi
+
+          PLUGIN_ID="${REPO_NAME#zbp_}"
+
+          if [[ -z "$PLUGIN_ID" ]]; then
+            echo "::error::未提取到 Plugin ID"
+            exit 1
+          fi
+
+          echo "plugin_id=$PLUGIN_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Detect Changes & Version
+        id: meta
+        shell: bash
+        run: |
+          SKIP="false"
+          TAG_NAME=""
+
+          write_out() {
+            echo "skip=$SKIP" >> "$GITHUB_OUTPUT"
+            echo "tag_name=$TAG_NAME" >> "$GITHUB_OUTPUT"
+          }
+
+          # tag 推送：行为保持原状
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            TAG_NAME="$GITHUB_REF_NAME"
+            echo "::notice::tag 推送触发，tag_name=$TAG_NAME"
+            write_out
+            exit 0
+          fi
+
+          # 手动触发：保持现状（打包上传，不发布 Release）
+          if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "::notice::手动触发，仅打包上传，不创建 Release"
+            write_out
+            exit 0
+          fi
+
+          # 分支推送：检测 plugin.xml / theme.xml 是否变更
+          BEFORE="${{ github.event.before }}"
+          SHA="${{ github.sha }}"
+
+          if [[ -z "$BEFORE" || "$BEFORE" =~ ^0+$ ]]; then
+            echo "::notice::无法获取推送前提交（首推或 force push），跳过发布"
+            SKIP="true"
+            write_out
+            exit 0
+          fi
+
+          CHANGED=$(git diff --name-only "$BEFORE" "$SHA" || true)
+          echo "变更文件列表:"
+          echo "$CHANGED"
+
+          if ! grep -Eq '(^|/)plugin\.xml$|(^|/)theme\.xml$' <<< "$CHANGED"; then
+            echo "::notice::本次推送未修改 plugin.xml 或 theme.xml，跳过发布"
+            SKIP="true"
+            write_out
+            exit 0
+          fi
+
+          # 从变更的 XML 中解析版本号
+          VERSION_FILE=$(grep -E '(^|/)plugin\.xml$|(^|/)theme\.xml$' <<< "$CHANGED" | head -n 1)
+          VERSION=$(sed -n 's:.*<version>\(.*\)</version>.*:\1:p' "$VERSION_FILE" | head -n 1 | tr -d '[:space:]')
+
+          if [[ -z "$VERSION" ]]; then
+            echo "::error::未能从 $VERSION_FILE 解析到版本号"
+            exit 1
+          fi
+
+          TAG_NAME="v$VERSION"
+
+          # tag 去重：已存在则跳过（版本号未变）
+          if git ls-remote --tags origin "refs/tags/$TAG_NAME" | grep -q .; then
+            echo "::notice::tag $TAG_NAME 已存在（版本号未变），跳过发布"
+            SKIP="true"
+            write_out
+            exit 0
+          fi
+
+          echo "::notice::检测到 $VERSION_FILE 版本变更为 $VERSION，将创建 tag $TAG_NAME 并发布"
+          write_out
+
+      - name: Setup PHP Environment
+        if: steps.meta.outputs.skip != 'true'
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.2"
+          extensions: zlib, simplexml, json
+
+      - name: Pack ZBA Application
+        id: pack
+        if: steps.meta.outputs.skip != 'true'
+        uses: wdssmq/zbp-app-pack@v1
+        with:
+          path: "./${{ steps.plugin.outputs.plugin_id }}"
+          gzip: "true"
+          verbose: "false"
+
+      - name: Upload to filepost.dev
+        id: upload
+        if: steps.meta.outputs.skip != 'true'
+        env:
+          FILE_POST_API: ${{ secrets.FILE_POST_API }}
+          ZBA_NAME: ${{ steps.pack.outputs.zba-name }}
+        run: |
+          if [[ -z "$FILE_POST_API" ]]; then
+            echo "::notice::未配置 FILE_POST_API，跳过上传到 filepost.dev"
+            echo "file_url=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          curl --fail-with-body -X POST https://upload.filepost.dev/v1/upload \
+            -H "X-API-Key: $FILE_POST_API" \
+            -F "file=@${ZBA_NAME}" \
+            -F "filename_mode=public" \
+            -o response.json
+
+            # 查看完整响应（调试用）
+            # cat response.json | jq .
+
+            # 提取单个字段
+            FILE_URL=$(jq -r '.url' response.json)
+            echo "文件地址: $FILE_URL"
+
+            # 写回 GitHub 输出，供后续步骤使用
+            echo "file_url=$FILE_URL" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v3
+        if: steps.meta.outputs.skip != 'true' && steps.meta.outputs.tag_name != ''
+        with:
+          files: ${{ steps.pack.outputs.zba-path }}
+          name: "${{ steps.pack.outputs.app-name }} ${{ steps.meta.outputs.tag_name }}"
+          tag_name: ${{ steps.meta.outputs.tag_name }}
+          target_commitish: ${{ github.sha }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          body: |
+            ### 📦 应用信息
+            - **应用 ID**：`${{ steps.pack.outputs.app-id }}`
+            - **应用类型**：`${{ steps.pack.outputs.app-type }}`
+            - **版本号**：`${{ steps.pack.outputs.app-version }}`
+            - **最后修改**：`${{ steps.pack.outputs.app-modified }}`
+            - **安装包**：`${{ steps.pack.outputs.zba-name }}`
+            ${{ steps.upload.outputs.file_url && format('- **备用下载**：[{0}]({1} "{2}")', steps.pack.outputs.zba-name || '下载链接', steps.upload.outputs.file_url, steps.pack.outputs.zba-name || '下载链接') }}
